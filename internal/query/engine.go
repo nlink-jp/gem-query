@@ -178,6 +178,17 @@ func (e *Engine) addToHistory(role, text string) {
 }
 
 func (e *Engine) loadSchema() (string, error) {
+	// Try information_schema first (works for native DuckDB)
+	schema, err := e.loadSchemaFromInfoSchema()
+	if err == nil && schema != "" {
+		return schema, nil
+	}
+
+	// Fallback: use SHOW TABLES + DESCRIBE (works for attached SQLite)
+	return e.loadSchemaFromDescribe()
+}
+
+func (e *Engine) loadSchemaFromInfoSchema() (string, error) {
 	rows, err := e.db.Query("SELECT table_name, column_name, data_type FROM information_schema.columns ORDER BY table_name, ordinal_position")
 	if err != nil {
 		return "", err
@@ -201,6 +212,50 @@ func (e *Engine) loadSchema() (string, error) {
 		fmt.Fprintf(&sb, "  %s %s\n", column, dataType)
 	}
 	return sb.String(), rows.Err()
+}
+
+func (e *Engine) loadSchemaFromDescribe() (string, error) {
+	tableRows, err := e.db.Query("SHOW TABLES")
+	if err != nil {
+		return "", err
+	}
+
+	var tables []string
+	for tableRows.Next() {
+		var name string
+		if err := tableRows.Scan(&name); err != nil {
+			tableRows.Close()
+			return "", err
+		}
+		tables = append(tables, name)
+	}
+	tableRows.Close()
+
+	var sb strings.Builder
+	for i, table := range tables {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		fmt.Fprintf(&sb, "TABLE %s:\n", table)
+
+		colRows, err := e.db.Query("DESCRIBE " + table)
+		if err != nil {
+			continue
+		}
+		for colRows.Next() {
+			// DESCRIBE returns: column_name, column_type, null, key, default, extra
+			var colName, colType string
+			var extra1, extra2, extra3, extra4 sql.NullString
+			if err := colRows.Scan(&colName, &colType, &extra1, &extra2, &extra3, &extra4); err != nil {
+				colRows.Close()
+				break
+			}
+			fmt.Fprintf(&sb, "  %s %s\n", colName, colType)
+		}
+		colRows.Close()
+	}
+
+	return sb.String(), nil
 }
 
 func resultToJSON(r *Result) string {

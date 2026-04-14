@@ -93,15 +93,38 @@ func run(cmd *cobra.Command, args []string) error {
 	dbPath := args[0]
 
 	// 2. Open DuckDB
-	db, err := sql.Open("duckdb", dbPath)
-	if err != nil {
-		return exitWithCode(fmt.Errorf("open database: %w", err), exitInputError)
+	isSQLite := isSQLiteFile(dbPath)
+	var db *sql.DB
+	if isSQLite {
+		// SQLite files need the sqlite extension — open an in-memory DuckDB first
+		db, err = sql.Open("duckdb", "")
+		if err != nil {
+			return exitWithCode(fmt.Errorf("open database: %w", err), exitInputError)
+		}
+		for _, stmt := range []string{"INSTALL sqlite", "LOAD sqlite"} {
+			if _, err := db.Exec(stmt); err != nil {
+				if flagDebug {
+					fmt.Fprintf(os.Stderr, "[debug] %s: %v\n", stmt, err)
+				}
+			}
+		}
+		escapedPath := strings.ReplaceAll(dbPath, "'", "''")
+		if _, err := db.Exec("ATTACH '" + escapedPath + "' AS db (TYPE sqlite)"); err != nil {
+			return exitWithCode(fmt.Errorf("attach sqlite database: %w", err), exitInputError)
+		}
+		if _, err := db.Exec("USE db"); err != nil {
+			return exitWithCode(fmt.Errorf("use database: %w", err), exitInputError)
+		}
+	} else {
+		db, err = sql.Open("duckdb", dbPath)
+		if err != nil {
+			return exitWithCode(fmt.Errorf("open database: %w", err), exitInputError)
+		}
+		if err := db.Ping(); err != nil {
+			return exitWithCode(fmt.Errorf("connect database: %w", err), exitInputError)
+		}
 	}
 	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		return exitWithCode(fmt.Errorf("connect database: %w", err), exitInputError)
-	}
 
 	// 3. Create Gemini client
 	ctx := context.Background()
@@ -173,6 +196,26 @@ type exitError struct {
 
 func (e *exitError) Error() string { return e.err.Error() }
 func (e *exitError) Unwrap() error { return e.err }
+
+func isSQLiteFile(path string) bool {
+	lower := strings.ToLower(path)
+	for _, ext := range []string{".db", ".sqlite", ".sqlite3"} {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	// Check magic bytes: "SQLite format 3\000"
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	magic := make([]byte, 16)
+	if _, err := f.Read(magic); err != nil {
+		return false
+	}
+	return string(magic) == "SQLite format 3\000"
+}
 
 func exitWithCode(err error, code int) error {
 	return &exitError{err: err, code: code}
