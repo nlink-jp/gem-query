@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-04-14
+
+### Added
+
+- Current date/time and timezone in system prompt for relative time resolution ("yesterday", "last month")
+- Timestamped user questions in conversation history
+- Rich result context in history (SQL + sample data up to 5 rows)
+- Explicit LLM instruction to use conversation history for follow-up queries
+
+### Fixed
+
+- Multi-turn context continuity — LLM now correctly resolves references like "filter that further", "break that down by month"
+
 ## [0.2.1] - 2026-04-14
 
 ### Fixed
