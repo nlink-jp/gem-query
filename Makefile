@@ -5,7 +5,7 @@ DIST_DIR := dist
 
 # Container runtime (podman preferred, docker as fallback)
 CONTAINER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
-GO_IMAGE  := golang:1.26
+GO_IMAGE  := golang:1.26.2
 
 PLATFORMS := \
 	linux/amd64 \
@@ -78,9 +78,9 @@ build-windows:
 		-v "$(CURDIR):/workspace:z" \
 		-w /workspace \
 		$(GO_IMAGE) \
-		bash -c "apt-get update -qq && apt-get install -y -q gcc-mingw-w64-x86-64 \
+		bash -c 'apt-get update -qq && apt-get install -y -q gcc-mingw-w64-x86-64 \
 			&& GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
-			go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe ."
+			go build -ldflags "-X main.version=$(VERSION)" -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .'
 
 ## test: Run the full test suite
 test:
