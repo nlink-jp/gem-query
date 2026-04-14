@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/marcboeker/go-duckdb"
 	"github.com/nlink-jp/gem-query/internal/gemini"
@@ -50,12 +51,23 @@ func (e *Engine) GenerateSQL(ctx context.Context, question string) (string, erro
 		return "", fmt.Errorf("wrap prompt: %w", err)
 	}
 
-	// System instruction includes guard prompt + schema
-	fullSysPrompt := fmt.Sprintf("%s\n\nDatabase schema:\n%s\n\n"+
-		"Respond with ONLY the SQL query, no explanation, no markdown fences.",
-		sysPrompt, e.schema)
+	// System instruction: guard + time + schema + context + output constraint
+	now := time.Now()
+	fullSysPrompt := fmt.Sprintf("%s\n\n"+
+		"Current time: %s (timezone: %s)\n\n"+
+		"Database schema:\n%s\n\n"+
+		"Instructions:\n"+
+		"- Respond with ONLY the SQL query, no explanation, no markdown fences.\n"+
+		"- Use the conversation history to understand context when the user "+
+		"refers to previous queries (e.g. \"break that down by month\", "+
+		"\"filter that further\", \"show me the same for region X\").\n"+
+		"- When the user uses relative time expressions (e.g. \"yesterday\", "+
+		"\"last month\", \"past 7 days\"), calculate the correct dates based on the current time above.",
+		sysPrompt,
+		now.Format("2006-01-02 15:04:05"), now.Format("MST"),
+		e.schema)
 
-	// Build conversation with history for context continuity
+	// Build conversation: history (plain text) + current question (guard-wrapped)
 	contents := make([]*genai.Content, len(e.history))
 	copy(contents, e.history)
 	contents = append(contents, genai.NewContentFromText(wrappedQuestion, genai.Role("user")))
@@ -90,6 +102,9 @@ func (e *Engine) FixSQL(ctx context.Context, sqlStr string, dryRunErr error) (st
 
 // GenerateAndValidate generates SQL, dry-runs it, and auto-fixes if needed.
 func (e *Engine) GenerateAndValidate(ctx context.Context, question string) (string, error) {
+	// Record the user's original question with timestamp in history
+	e.addToHistory("user", fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), question))
+
 	sqlStr, err := e.GenerateSQL(ctx, question)
 	if err != nil {
 		return "", err
@@ -145,9 +160,9 @@ func (e *Engine) Execute(ctx context.Context, sqlStr string) (*Result, error) {
 	}
 
 	// Record in history for context continuity
-	e.addToHistory("user", "Query: "+sqlStr)
-	summary := fmt.Sprintf("Result: %d rows, columns: %s", len(resultRows), strings.Join(columns, ", "))
-	e.addToHistory("model", summary)
+	// The model's response: the SQL it generated + result summary with sample data
+	resultSummary := formatResultSummary(columns, resultRows, sqlStr)
+	e.addToHistory("model", resultSummary)
 
 	return &Result{
 		Columns: columns,
@@ -171,10 +186,41 @@ func (e *Engine) Summarize(ctx context.Context, result *Result) (string, error) 
 
 func (e *Engine) addToHistory(role, text string) {
 	e.history = append(e.history, genai.NewContentFromText(text, genai.Role(role)))
-	// Keep history manageable
+	// Keep history manageable — retain last 10 exchanges (20 messages)
+	// Always trim to even count so user/model pairs stay aligned
 	if len(e.history) > 20 {
 		e.history = e.history[len(e.history)-20:]
 	}
+}
+
+// formatResultSummary builds a rich context string for the conversation history.
+func formatResultSummary(columns []string, rows [][]any, sqlStr string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Generated SQL: %s\n", sqlStr)
+	fmt.Fprintf(&sb, "Result: %d rows, columns: %s\n", len(rows), strings.Join(columns, ", "))
+
+	// Include up to 5 sample rows so the LLM can reference actual data
+	sampleCount := len(rows)
+	if sampleCount > 5 {
+		sampleCount = 5
+	}
+	if sampleCount > 0 {
+		sb.WriteString("Sample data:\n")
+		for i := 0; i < sampleCount; i++ {
+			sb.WriteString("  ")
+			for j, col := range columns {
+				if j > 0 {
+					sb.WriteString(", ")
+				}
+				fmt.Fprintf(&sb, "%s=%v", col, rows[i][j])
+			}
+			sb.WriteString("\n")
+		}
+		if len(rows) > sampleCount {
+			fmt.Fprintf(&sb, "  ... and %d more rows\n", len(rows)-sampleCount)
+		}
+	}
+	return sb.String()
 }
 
 func (e *Engine) loadSchema() (string, error) {
