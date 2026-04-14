@@ -2,12 +2,13 @@
 package shell
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/peterh/liner"
 
 	"github.com/nlink-jp/gem-query/internal/output"
 	"github.com/nlink-jp/gem-query/internal/query"
@@ -18,7 +19,7 @@ type Shell struct {
 	engine     *query.Engine
 	lastResult *query.Result
 	format     string
-	reader     *bufio.Reader
+	line       *liner.State
 	out        io.Writer
 	errOut     io.Writer
 	jviz       jvizState
@@ -27,10 +28,13 @@ type Shell struct {
 // New creates a new interactive shell.
 // jvizPath specifies the path to the jviz binary; if empty, /jviz command is disabled.
 func New(engine *query.Engine, jvizPath string) *Shell {
+	ln := liner.NewLiner()
+	ln.SetCtrlCAborts(true)
+	ln.SetMultiLineMode(false)
 	return &Shell{
 		engine: engine,
 		format: "table",
-		reader: bufio.NewReader(os.Stdin),
+		line:   ln,
 		out:    os.Stdout,
 		errOut: os.Stderr,
 		jviz:   jvizState{binPath: jvizPath},
@@ -39,16 +43,16 @@ func New(engine *query.Engine, jvizPath string) *Shell {
 
 // Run starts the REPL loop.
 func (s *Shell) Run(ctx context.Context) error {
+	defer s.line.Close()
 	defer s.jviz.stop()
 
 	fmt.Fprintln(s.out, "gem-query interactive shell. Type /help for commands, /quit to exit.")
 	fmt.Fprintln(s.out)
 
 	for {
-		fmt.Fprint(s.out, "gem-query> ")
-		line, err := s.reader.ReadString('\n')
+		line, err := s.line.Prompt("gem-query> ")
 		if err != nil {
-			if err == io.EOF {
+			if err == liner.ErrPromptAborted || err == io.EOF {
 				fmt.Fprintln(s.out)
 				return nil
 			}
@@ -59,6 +63,8 @@ func (s *Shell) Run(ctx context.Context) error {
 		if line == "" {
 			continue
 		}
+
+		s.line.AppendHistory(line)
 
 		if strings.HasPrefix(line, "/") {
 			if quit := s.handleCommand(ctx, line); quit {
@@ -114,6 +120,14 @@ func (s *Shell) handleCommand(ctx context.Context, line string) (quit bool) {
 	return false
 }
 
+func (s *Shell) prompt(p string) string {
+	line, err := s.line.Prompt(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(line)
+}
+
 func (s *Shell) handleQuery(ctx context.Context, question string) {
 	fmt.Fprintf(s.errOut, "Generating SQL...\n")
 
@@ -125,23 +139,20 @@ func (s *Shell) handleQuery(ctx context.Context, question string) {
 
 	// Show SQL proposal
 	fmt.Fprintf(s.out, "\n[SQL]\n  %s\n\n", sqlStr)
-	fmt.Fprint(s.out, "Execute? [Y/n/e(dit)]: ")
 
-	response, _ := s.reader.ReadString('\n')
-	response = strings.TrimSpace(strings.ToLower(response))
+	response := strings.ToLower(s.prompt("Execute? [Y/n/e(dit)]: "))
 
 	switch response {
 	case "n", "no":
 		fmt.Fprintln(s.errOut, "cancelled.")
 		return
 	case "e", "edit":
-		fmt.Fprint(s.out, "Enter SQL: ")
-		edited, _ := s.reader.ReadString('\n')
-		sqlStr = strings.TrimSpace(edited)
-		if sqlStr == "" {
+		edited := s.prompt("Enter SQL: ")
+		if edited == "" {
 			fmt.Fprintln(s.errOut, "cancelled.")
 			return
 		}
+		sqlStr = edited
 	case "", "y", "yes":
 		// proceed
 	default:
@@ -315,6 +326,11 @@ func (s *Shell) printHelp() {
   /jviz off               Stop jviz
   /format <table|json|csv>  Change display format
   /help                   Show this help
-  /quit                   Exit`
+  /quit                   Exit
+
+Keyboard:
+  Up/Down                 Navigate command history
+  Ctrl-C                  Cancel current input
+  Ctrl-D                  Exit`
 	fmt.Fprintln(s.out, help)
 }
