@@ -7,6 +7,17 @@ DIST_DIR := dist
 CONTAINER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 GO_IMAGE  := golang:1.26.2
 
+# macOS Developer ID signing / notarization (see nlink-jp/.github
+# CONVENTIONS.md §Code Signing). Defaults match any Developer ID
+# Application cert in the keychain and the org-standard notary
+# profile. Builds without these fall back to ad-hoc / un-notarized
+# with a one-line warning — see scripts/codesign-darwin.sh. The
+# codesign step runs on the macOS host only; non-Mach-O binaries
+# (produced inside the linux / windows build containers) are
+# auto-skipped by the script.
+CODESIGN_IDENTITY ?= Developer ID Application
+NOTARY_PROFILE    ?= nlink-jp-notary
+
 PLATFORMS := \
 	linux/amd64 \
 	linux/arm64 \
@@ -15,12 +26,13 @@ PLATFORMS := \
 	windows/amd64
 
 .PHONY: build build-all build-darwin build-linux build-linux-native build-windows \
-        test vet check clean help
+        package test vet check clean help
 
 ## build: Build for the current platform (CGO required for DuckDB)
 build:
 	@mkdir -p $(DIST_DIR)
 	CGO_ENABLED=1 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY) .
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY) "$(CODESIGN_IDENTITY)"
 
 ## build-all: Cross-compile for all target platforms
 build-all: build-darwin build-linux build-windows
@@ -30,6 +42,8 @@ build-darwin:
 	@mkdir -p $(DIST_DIR)
 	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-amd64 .
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-arm64 .
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-amd64 "$(CODESIGN_IDENTITY)"
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)"
 
 ## build-linux: Compile linux/amd64 and linux/arm64 inside a container
 build-linux:
@@ -78,9 +92,26 @@ build-windows:
 		-v "$(CURDIR):/workspace:z" \
 		-w /workspace \
 		$(GO_IMAGE) \
-		bash -c 'apt-get update -qq && apt-get install -y -q gcc-mingw-w64-x86-64 \
-			&& GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc \
+		bash -c 'apt-get update -qq && apt-get install -y -q gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64 \
+			&& find /usr/lib/gcc/x86_64-w64-mingw32ucrt /usr/x86_64-w64-mingw32ucrt -name "*.a" -exec x86_64-w64-mingw32ucrt-ranlib {} + \
+			&& GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+			CC=x86_64-w64-mingw32ucrt-gcc CXX=x86_64-w64-mingw32ucrt-g++ \
 			go build -ldflags "-X main.version=$(VERSION)" -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .'
+
+## package: Build all platforms, zip with version suffix, and
+## notarize darwin builds. Asset naming follows the org convention
+## (gem-query-vX.Y.Z-<os>-<arch>.zip).
+package: build-all
+	@cd $(DIST_DIR) && for f in $(BINARY)-*; do \
+		case "$$f" in *.zip) continue ;; esac; \
+		suffix=$${f#$(BINARY)-}; \
+		suffix=$${suffix%%.exe}; \
+		cp ../README.md .; \
+		zip -j "$(BINARY)-$(VERSION)-$${suffix}.zip" "$$f" README.md; \
+		rm -f README.md; \
+	done
+	@scripts/notarize-darwin.sh $(DIST_DIR)/$(BINARY)-$(VERSION)-darwin-amd64.zip "$(NOTARY_PROFILE)"
+	@scripts/notarize-darwin.sh $(DIST_DIR)/$(BINARY)-$(VERSION)-darwin-arm64.zip "$(NOTARY_PROFILE)"
 
 ## test: Run the full test suite
 test:
