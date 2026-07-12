@@ -169,7 +169,7 @@ gem-query ./data.duckdb "月別売上" --format json | jviz
 
 ```bash
 make build       # ビルド → dist/gem-query
-make build-all   # クロスコンパイル（Linux/WindowsはPodman/Docker必要）
+make build-all   # クロスコンパイル（darwin は arm64 のみ・Intel 非対応、Linux/WindowsはPodman/Docker必要）
 make test        # 全テスト実行
 make check       # vet → test → build
 make clean       # dist/を削除

@@ -18,10 +18,10 @@ GO_IMAGE  := golang:1.26.2
 CODESIGN_IDENTITY ?= Developer ID Application
 NOTARY_PROFILE    ?= nlink-jp-notary
 
+# darwin ships arm64 only (no amd64, no universal). linux/windows keep their matrix.
 PLATFORMS := \
 	linux/amd64 \
 	linux/arm64 \
-	darwin/amd64 \
 	darwin/arm64 \
 	windows/amd64
 
@@ -37,13 +37,11 @@ build:
 ## build-all: Cross-compile for all target platforms
 build-all: build-darwin build-linux build-windows
 
-## build-darwin: Compile darwin/amd64 and darwin/arm64 (macOS host only)
+## build-darwin: Compile darwin/arm64 (macOS host only; arm64-only policy, no Intel)
 build-darwin:
 	@mkdir -p $(DIST_DIR)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-amd64 .
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY)-darwin-arm64 .
-	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-amd64 "$(CODESIGN_IDENTITY)"
-	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)"
+	@scripts/codesign-darwin.sh $(DIST_DIR)/$(BINARY)-darwin-arm64 "$(CODESIGN_IDENTITY)" "$(BINARY)"
 
 ## build-linux: Compile linux/amd64 and linux/arm64 inside a container
 build-linux:
@@ -98,23 +96,22 @@ build-windows:
 			CC=x86_64-w64-mingw32ucrt-gcc CXX=x86_64-w64-mingw32ucrt-g++ \
 			go build -ldflags "-X main.version=$(VERSION)" -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .'
 
-## package: Build all platforms, zip with version suffix, and
-## notarize darwin builds. Asset naming follows the org convention
-## (gem-query-vX.Y.Z-<os>-<arch>.zip).
+## package: Build all platforms, archive with version suffix (zip for
+## darwin/windows, tar.gz for linux), bundle the canonical binary +
+## README.md + LICENSE, and notarize the darwin build. Asset naming
+## follows the org Release Archive Standard
+## (gem-query-vX.Y.Z-<os>-<arch>.<ext>).
 package: build-all
-	@cd $(DIST_DIR) && for f in $(BINARY)-*; do \
-		case "$$f" in *.zip) continue ;; esac; \
-		suffix=$${f#$(BINARY)-}; \
-		suffix=$${suffix%%.exe}; \
-		ext=""; case "$$f" in *.exe) ext=".exe" ;; esac; \
-		cp ../README.md .; \
-		stage="$$(dirname "$$f")/_pkg"; rm -rf "$$stage"; mkdir -p "$$stage"; \
-		cp "$$f" "$$stage/$(BINARY)$$ext"; \
-		zip -j "$(BINARY)-$(VERSION)-$${suffix}.zip" "$$stage/$(BINARY)$$ext" README.md; \
-		rm -rf "$$stage"; \
-		rm -f README.md; \
+	@cd $(DIST_DIR) && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
+		ext=""; [ "$$os" = windows ] && ext=".exe"; \
+		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \
+		cp "$(BINARY)-$$os-$$arch$$ext" "$$stage/$(BINARY)$$ext"; \
+		cp ../README.md ../LICENSE $$stage/; \
+		base="$(BINARY)-$(VERSION)-$$os-$$arch"; \
+		if [ "$$os" = linux ]; then ( cd $$stage && tar -czf "../$$base.tar.gz" * ); \
+		else ( cd $$stage && zip -q "../$$base.zip" * ); fi; \
+		rm -rf $$stage; \
 	done
-	@scripts/notarize-darwin.sh $(DIST_DIR)/$(BINARY)-$(VERSION)-darwin-amd64.zip "$(NOTARY_PROFILE)"
 	@scripts/notarize-darwin.sh $(DIST_DIR)/$(BINARY)-$(VERSION)-darwin-arm64.zip "$(NOTARY_PROFILE)"
 
 ## test: Run the full test suite

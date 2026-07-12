@@ -171,7 +171,7 @@ Question → LLM generates SQL (with schema context)
 
 ```bash
 make build       # Build for current platform → dist/gem-query
-make build-all   # Cross-compile (requires podman/docker for Linux/Windows)
+make build-all   # Cross-compile (darwin arm64 only, no Intel; podman/docker for Linux/Windows)
 make test        # Run all tests
 make check       # vet → test → build
 make clean       # Remove dist/
