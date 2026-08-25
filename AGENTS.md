@@ -12,6 +12,7 @@ Part of util-series.
 make build          # Build → dist/gem-query (CGO_ENABLED=1)
 make test           # Run all tests
 make build-all      # Cross-compile (requires podman/docker for Linux/Windows)
+make verify-release  # gate: .notarized marker + freshness (run before upload)
 make check          # vet → test → build
 make clean          # Remove dist/
 ```
