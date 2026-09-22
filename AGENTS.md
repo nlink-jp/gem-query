@@ -13,7 +13,7 @@ make build          # Build → dist/gem-query (CGO_ENABLED=1)
 make test           # Run all tests
 make test-linux     # same suite on Linux (container)
 make build-all      # Cross-compile (requires podman/docker for Linux/Windows)
-make verify-release  # gate: .notarized marker + freshness (run before upload)
+make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 make check          # vet → test → build
 make clean          # Remove dist/
 ```
