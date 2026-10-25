@@ -52,6 +52,9 @@ func TestExecuteNormalizesDriverTypes(t *testing.T) {
 		{"{'k': 'v'}", "map[string]interface {}(map[k:v])"},
 		{"MAP {'k': 1}", "map[string]interface {}(map[k:1])"},
 		{"MAP {1: 'x', 2: 'y'}", "map[string]interface {}(map[1:x 2:y])"},
+		{"[MAP {'k': 1}]", "[]interface {}([map[k:1]])"},
+		{"{'m': MAP {'k': 1}}", "map[string]interface {}(map[m:map[k:1]])"},
+		{"[1.25::DECIMAL(4,2)]", "[]interface {}([1.25])"},
 	}
 	for _, c := range cases {
 		t.Run(c.expr, func(t *testing.T) {

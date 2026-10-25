@@ -346,6 +346,21 @@ func normalizeValue(v any) any {
 			m[fmt.Sprint(k)] = normalizeValue(vals[i])
 		}
 		return m
+	case []any:
+		// LIST / ARRAY: normalize each element, so a MAP or DECIMAL inside a
+		// list prints the same as at the top level.
+		out := make([]any, len(d))
+		for i, e := range d {
+			out[i] = normalizeValue(e)
+		}
+		return out
+	case map[string]any:
+		// STRUCT (and JSON objects): normalize each field.
+		out := make(map[string]any, len(d))
+		for k, e := range d {
+			out[k] = normalizeValue(e)
+		}
+		return out
 	case []byte:
 		return string(d)
 	default:

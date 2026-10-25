@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   new driver returns MAP as an ordered map whose own text form is a debugging
   string; gem-query turns it into a string-keyed map, which also lets
   `--format json` encode a MAP column the old driver's value could not.
+- **Values inside a LIST or STRUCT are normalized like top-level ones.** A MAP
+  nested in a list prints as `[map[k:1]]` rather than the driver's debugging
+  form, and a DECIMAL inside a list prints as a number instead of its raw
+  struct.
 
 ### Security
 
