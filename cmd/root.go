@@ -16,7 +16,7 @@ import (
 	"github.com/nlink-jp/gem-query/internal/shell"
 	"github.com/spf13/cobra"
 
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/duckdb/duckdb-go/v2"
 )
 
 var version string

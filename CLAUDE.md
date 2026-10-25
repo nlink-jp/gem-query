@@ -42,7 +42,7 @@ Settings are loaded: defaults → TOML file → env vars → CLI flags.
 ## Key dependencies
 
 - `google.golang.org/genai` — Google Gemini SDK (Vertex AI backend)
-- `github.com/marcboeker/go-duckdb` — DuckDB Go driver (CGO)
+- `github.com/duckdb/duckdb-go/v2` — DuckDB Go driver (CGO; v2.20000.x bundles DuckDB v2.0)
 - `github.com/nlink-jp/nlk` — guard, backoff, strip, jsonfix
 - `github.com/spf13/cobra` — CLI framework
 - `github.com/BurntSushi/toml` — config file parsing

@@ -65,6 +65,13 @@ Config loaded: defaults → TOML (`~/.config/gem-query/config.toml`) → env var
   Cross-compilation needs Podman/Docker for Linux/Windows targets.
 - DuckDB DECIMAL type returns a struct (`duckdb.Decimal`), not a float.
   The query engine normalizes this to `float64` before display.
+- The driver is `github.com/duckdb/duckdb-go/v2` (`marcboeker/go-duckdb` is
+  frozen). Its version encodes DuckDB's: v2.20000.x = DuckDB v2.0.x. MAP
+  scans into `duckdb.OrderedMap`, whose `String()` is a debugging form, so
+  `normalizeValue` turns it into `map[string]any`. UUID still arrives as 16
+  raw bytes and is not formatted.
+- The native libraries come from `go.duckdb.org/libduckdb/*` through the Go
+  module proxy; a restricted `GOPROXY` must allow it.
 - Gemini `SystemInstruction` must be nil (not empty string) when no
   system prompt is provided, otherwise the API returns 400.
 - Only SELECT queries are generated. The system prompt explicitly

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **DuckDB driver moved to `github.com/duckdb/duckdb-go/v2` v2.20000.0, which
+  bundles DuckDB v2.0.0 LTS** (was `github.com/marcboeker/go-duckdb` v1.8.5 with
+  DuckDB v1.1.3). The old module path no longer receives releases, so it could
+  never take a DuckDB fix. DuckDB 2.0 uses a new SQL parser by default; the
+  dry-run / auto-fix loop is unchanged and still catches what it rejects.
+  Database files gem-query opens stay readable by older DuckDB versions; only
+  files *created* by DuckDB 2.0 are not.
+- **A MAP column now prints as `map[k:1]` and encodes as a JSON object.** The
+  new driver returns MAP as an ordered map whose own text form is a debugging
+  string; gem-query turns it into a string-keyed map, which also lets
+  `--format json` encode a MAP column the old driver's value could not.
+
+### Security
+
+- **CVE-2026-111497 (Brotli decoder out-of-bounds write) is not fixed yet.**
+  DuckDB's parquet extension vendors Brotli 1.1.0, and every DuckDB release so
+  far — v2.0.0 included — still does; the upstream fix (duckdb/duckdb#27791) was
+  unmerged on 2026-10-25. It is reachable only when a query reads a crafted
+  Brotli-compressed Parquet file (`read_parquet`). This release moves gem-query
+  onto the maintained driver line so the fix lands as a dependency bump once
+  DuckDB ships it.
+
 ### Fixed
 
 - **`make verify-release` now fails closed.** Its last block chained unzip, the

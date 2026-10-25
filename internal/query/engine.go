@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcboeker/go-duckdb"
+	"github.com/duckdb/duckdb-go/v2"
 	"github.com/nlink-jp/gem-query/internal/gemini"
 	"github.com/nlink-jp/gem-query/internal/security"
 	"github.com/nlink-jp/nlk/jsonfix"
@@ -337,6 +337,15 @@ func normalizeValue(v any) any {
 		divisor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d.Scale)), nil))
 		result, _ := new(big.Float).Quo(f, divisor).Float64()
 		return result
+	case duckdb.OrderedMap:
+		// The driver's String() is a debugging form ("OrderedMap{k: 1}").
+		// A string-keyed map prints as map[k:1] and encodes as a JSON object.
+		keys, vals := d.Keys(), d.Values()
+		m := make(map[string]any, len(keys))
+		for i, k := range keys {
+			m[fmt.Sprint(k)] = normalizeValue(vals[i])
+		}
+		return m
 	case []byte:
 		return string(d)
 	default:
