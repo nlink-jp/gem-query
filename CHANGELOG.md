@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **UUID columns print in canonical form** (`00112233-4455-…`) instead of 16
+  raw bytes. The column's DuckDB type decides, so a 16-byte BLOB is untouched.
 - **SQLite queries no longer depend on landing on the first connection.** `USE
   db` applies per connection; every new connection now attaches the file and
   selects it.

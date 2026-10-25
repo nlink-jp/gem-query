@@ -68,8 +68,9 @@ Config loaded: defaults → TOML (`~/.config/gem-query/config.toml`) → env var
 - The driver is `github.com/duckdb/duckdb-go/v2` (`marcboeker/go-duckdb` is
   frozen). Its version encodes DuckDB's: v2.20000.x = DuckDB v2.0.x. MAP
   scans into `duckdb.OrderedMap`, whose `String()` is a debugging form, so
-  `normalizeValue` turns it into `map[string]any`. UUID still arrives as 16
-  raw bytes and is not formatted.
+  `normalizeValue` turns it into `map[string]any`. UUID arrives as 16 raw
+  bytes; `Execute` formats it by the column's DuckDB type (`UUID`), never by
+  the value's shape, so a 16-byte BLOB stays raw.
 - Generated SQL must be a single SELECT as classified by DuckDB's parser
   (`selectConn`, via the driver's `Prepare` + `StatementType`) before both the
   dry-run and execution: the driver runs the leading statements of a

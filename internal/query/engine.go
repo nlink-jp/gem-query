@@ -4,6 +4,7 @@ package query
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -151,6 +152,14 @@ func (e *Engine) Execute(ctx context.Context, sqlStr string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
 	}
+	// The driver returns a UUID as its 16 raw bytes, which no byte-shape
+	// test can tell from a 16-byte BLOB; the column's DuckDB type can.
+	isUUID := make([]bool, len(columns))
+	if cts, err := rows.ColumnTypes(); err == nil {
+		for i, ct := range cts {
+			isUUID[i] = ct.DatabaseTypeName() == "UUID"
+		}
+	}
 
 	var resultRows [][]any
 	for rows.Next() {
@@ -163,6 +172,10 @@ func (e *Engine) Execute(ctx context.Context, sqlStr string) (*Result, error) {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 		for i, v := range values {
+			if b, ok := v.([]byte); ok && isUUID[i] && len(b) == 16 {
+				values[i] = formatUUID(b)
+				continue
+			}
 			values[i] = normalizeValue(v)
 		}
 		resultRows = append(resultRows, values)
@@ -378,6 +391,12 @@ func normalizeValue(v any) any {
 	default:
 		return v
 	}
+}
+
+// formatUUID renders a UUID's 16 bytes in canonical 8-4-4-4-12 form.
+func formatUUID(b []byte) string {
+	h := hex.EncodeToString(b)
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
 func cleanSQL(text string) string {
