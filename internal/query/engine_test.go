@@ -119,6 +119,8 @@ func TestExecuteAndDryRunRejectWrites(t *testing.T) {
 	for _, q := range []string{
 		"SELECT 1; DROP TABLE t",
 		"SELECT * FROM t; INSERT INTO t VALUES (2)",
+		"DROP TABLE t; SELECT 1",
+		"INSERT INTO t VALUES (2); SELECT * FROM t",
 		"WITH c AS (SELECT 2) INSERT INTO t SELECT * FROM c",
 		"DELETE FROM t",
 		"COPY t TO '" + out + "'",

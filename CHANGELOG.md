@@ -15,18 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `SELECT 1; DROP TABLE t` dropped the table during validation (measured).
   Nothing checked that a query was a SELECT besides the prompt. Now DuckDB's
   own parser must classify the SQL as exactly one SELECT statement before the
-  dry-run and before execution; anything else (a second statement,
-  INSERT/UPDATE/DELETE, `COPY … TO`, `ATTACH`, `SET`, `INSTALL`, `CALL`) is
-  refused without running.
+  dry-run and before execution; a second statement, INSERT/UPDATE/DELETE,
+  `COPY … TO`, `ATTACH`, `SET`, `INSTALL` and `CALL` are refused without
+  running.
 - **The database is opened read-only.** A DuckDB file is opened with
   `access_mode=read_only` and a SQLite file is attached `READ_ONLY`, so the
-  engine itself refuses writes to your data. This also keeps DuckDB 2.0 from
-  writing to files older DuckDB versions must still read.
+  engine itself refuses writes to your data — including a top-level
+  data-modifying CTE (`WITH d AS (DELETE … RETURNING *) SELECT …`), which the
+  parser classifies as a SELECT. This also keeps DuckDB 2.0 from writing to
+  files older DuckDB versions must still read.
+- **A query can no longer write files or install extensions.** A plain SELECT
+  of `enable_profiling(save_location=…)` overwrote an arbitrary file and
+  `enable_logging(storage='file', …)` created log files, even on a read-only
+  database; reading a URL installed an extension. gem-query now switches off
+  extension autoinstall/autoload and locks DuckDB's configuration after
+  opening, so DuckDB refuses these.
 
 ### Changed
 
 - **A database path that does not exist is an error** instead of silently
   creating an empty DuckDB file.
+
+### Documentation
+
+- The README said every query is shown for approval; one-shot mode prints the
+  SQL to stderr and runs it (it is meant for pipes). The README now says so.
 
 ### Fixed
 

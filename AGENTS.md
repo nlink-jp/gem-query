@@ -79,8 +79,11 @@ Config loaded: defaults → TOML (`~/.config/gem-query/config.toml`) → env var
 - `openDatabase` opens the user's database read-only (DuckDB
   `?access_mode=read_only`; SQLite via a connector that runs `ATTACH IF NOT
   EXISTS … (TYPE sqlite, READ_ONLY)` and `USE db` on every new connection,
-  since USE is per connection). Read-only does not stop `COPY … TO`, so the
-  SELECT check is still needed.
+  since USE is per connection). Read-only does not stop `COPY … TO` or a
+  SELECT of `enable_profiling` / `enable_logging` writing files, so the SELECT
+  check stays and `openDatabase` locks the configuration (`lockStatements`:
+  extension autoinstall/autoload off, `lock_configuration`). Nothing may `SET`
+  after open.
 - The native libraries come from `go.duckdb.org/libduckdb/*` through the Go
   module proxy; a restricted `GOPROXY` must allow it.
 - Gemini `SystemInstruction` must be nil (not empty string) when no
