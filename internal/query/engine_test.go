@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -95,6 +97,64 @@ func TestExecuteMapEncodesAsJSON(t *testing.T) {
 	}
 	if got, want := string(b), `{"a":1,"b":2}`; got != want {
 		t.Errorf("json = %s, want %s", got, want)
+	}
+}
+
+// TestExecuteAndDryRunRejectWrites drives generated SQL that is not a single
+// SELECT through both DryRun (which runs before the user confirms) and
+// Execute, and checks the database and filesystem are unchanged — the
+// driver runs the leading statements of a multi-statement query while
+// preparing it, so an error alone would not prove nothing ran.
+func TestExecuteAndDryRunRejectWrites(t *testing.T) {
+	db := openTestDB(t)
+	if _, err := db.Exec("CREATE TABLE t AS SELECT 1 AS a"); err != nil {
+		t.Fatal(err)
+	}
+	e, err := NewEngine(db, nil)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	out := filepath.Join(t.TempDir(), "out.csv")
+	for _, q := range []string{
+		"SELECT 1; DROP TABLE t",
+		"SELECT * FROM t; INSERT INTO t VALUES (2)",
+		"WITH c AS (SELECT 2) INSERT INTO t SELECT * FROM c",
+		"DELETE FROM t",
+		"COPY t TO '" + out + "'",
+		"ATTACH ':memory:' AS m",
+		"SET threads = 1",
+		"INSTALL httpfs",
+		"CALL pragma_version()",
+		"EXPLAIN ANALYZE DELETE FROM t",
+	} {
+		if err := e.DryRun(q); err == nil {
+			t.Errorf("DryRun(%q) = nil, want rejected", q)
+		}
+		if _, err := e.Execute(context.Background(), q); err == nil {
+			t.Errorf("Execute(%q) = nil, want rejected", q)
+		}
+		var n, dbs int
+		if err := db.QueryRow("SELECT count(*) FROM t").Scan(&n); err != nil || n != 1 {
+			t.Fatalf("after %q: table t changed (rows=%d, err=%v)", q, n, err)
+		}
+		db.QueryRow("SELECT count(*) FROM duckdb_databases() WHERE NOT internal").Scan(&dbs)
+		if dbs != 1 {
+			t.Fatalf("after %q: %d attached databases, want 1", q, dbs)
+		}
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Errorf("COPY wrote %s", out)
+	}
+	if err := e.DryRun("SELECT 1; DROP TABLE t"); !errors.Is(err, errNotSelect) {
+		t.Errorf("multi-statement DryRun error = %v, want errNotSelect", err)
+	}
+	for _, q := range []string{"SELECT * FROM t", "FROM t", "WITH c AS (SELECT 1) SELECT * FROM c", "DESCRIBE t", "SELECT a FROM t;"} {
+		if err := e.DryRun(q); err != nil {
+			t.Errorf("DryRun(%q) = %v, want allowed", q, err)
+		}
+		if _, err := e.Execute(context.Background(), q); err != nil {
+			t.Errorf("Execute(%q) = %v, want allowed", q, err)
+		}
 	}
 }
 

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- **Generated SQL could change your database before you confirmed it.** The
+  dry-run ran `EXPLAIN <sql>` as given, and the DuckDB driver executes every
+  statement but the last of a multi-statement query, so a generated
+  `SELECT 1; DROP TABLE t` dropped the table during validation (measured).
+  Nothing checked that a query was a SELECT besides the prompt. Now DuckDB's
+  own parser must classify the SQL as exactly one SELECT statement before the
+  dry-run and before execution; anything else (a second statement,
+  INSERT/UPDATE/DELETE, `COPY … TO`, `ATTACH`, `SET`, `INSTALL`, `CALL`) is
+  refused without running.
+- **The database is opened read-only.** A DuckDB file is opened with
+  `access_mode=read_only` and a SQLite file is attached `READ_ONLY`, so the
+  engine itself refuses writes to your data. This also keeps DuckDB 2.0 from
+  writing to files older DuckDB versions must still read.
+
+### Changed
+
+- **A database path that does not exist is an error** instead of silently
+  creating an empty DuckDB file.
+
+### Fixed
+
+- **SQLite queries no longer depend on landing on the first connection.** `USE
+  db` applies per connection; every new connection now attaches the file and
+  selects it.
+
 ## [0.5.0] - 2026-10-25
 
 ### Changed

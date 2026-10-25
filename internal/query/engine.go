@@ -80,9 +80,16 @@ func (e *Engine) GenerateSQL(ctx context.Context, question string) (string, erro
 	return cleanSQL(text), nil
 }
 
-// DryRun validates SQL syntax by using EXPLAIN.
+// DryRun validates SQL by using EXPLAIN, after checking it is a single
+// SELECT statement.
 func (e *Engine) DryRun(sqlStr string) error {
-	_, err := e.db.Exec("EXPLAIN " + sqlStr)
+	ctx := context.Background()
+	conn, err := selectConn(ctx, e.db, sqlStr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.ExecContext(ctx, "EXPLAIN "+sqlStr)
 	return err
 }
 
@@ -129,7 +136,12 @@ func (e *Engine) GenerateAndValidate(ctx context.Context, question string) (stri
 
 // Execute runs a SQL query and returns the result.
 func (e *Engine) Execute(ctx context.Context, sqlStr string) (*Result, error) {
-	rows, err := e.db.QueryContext(ctx, sqlStr)
+	conn, err := selectConn(ctx, e.db, sqlStr)
+	if err != nil {
+		return nil, fmt.Errorf("execute query: %w", err)
+	}
+	defer conn.Close()
+	rows, err := conn.QueryContext(ctx, sqlStr)
 	if err != nil {
 		return nil, fmt.Errorf("execute query: %w", err)
 	}

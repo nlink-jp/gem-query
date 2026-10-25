@@ -165,7 +165,7 @@ Question → LLM generates SQL (with schema context)
 4. **Auto-fix loop** — If dry-run fails, feeds the error back to Gemini for correction (up to 3 attempts)
 5. **User confirmation** — Always shows the proposed SQL and asks for approval
 6. **Context continuity** — Previous SQL/results are carried into subsequent questions
-7. **Security** — User input is wrapped with nonce-tagged XML (nlk/guard) to prevent prompt injection; only SELECT queries are generated
+7. **Security** — User input is wrapped with nonce-tagged XML (nlk/guard) to prevent prompt injection. Only SELECT queries are generated, and only SELECT queries run: before the dry-run, DuckDB's own parser must classify the generated SQL as a single SELECT statement, and the database is opened read-only (a DuckDB file with `access_mode=read_only`, a SQLite file attached `READ_ONLY`), so gem-query never changes your data. A database path that does not exist is an error rather than a new empty file
 
 ## Building
 

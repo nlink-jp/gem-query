@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -92,37 +91,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	dbPath := args[0]
 
-	// 2. Open DuckDB
-	isSQLite := isSQLiteFile(dbPath)
-	var db *sql.DB
-	if isSQLite {
-		// SQLite files need the sqlite extension — open an in-memory DuckDB first
-		db, err = sql.Open("duckdb", "")
-		if err != nil {
-			return exitWithCode(fmt.Errorf("open database: %w", err), exitInputError)
-		}
-		for _, stmt := range []string{"INSTALL sqlite", "LOAD sqlite"} {
-			if _, err := db.Exec(stmt); err != nil {
-				if flagDebug {
-					fmt.Fprintf(os.Stderr, "[debug] %s: %v\n", stmt, err)
-				}
-			}
-		}
-		escapedPath := strings.ReplaceAll(dbPath, "'", "''")
-		if _, err := db.Exec("ATTACH '" + escapedPath + "' AS db (TYPE sqlite)"); err != nil {
-			return exitWithCode(fmt.Errorf("attach sqlite database: %w", err), exitInputError)
-		}
-		if _, err := db.Exec("USE db"); err != nil {
-			return exitWithCode(fmt.Errorf("use database: %w", err), exitInputError)
-		}
-	} else {
-		db, err = sql.Open("duckdb", dbPath)
-		if err != nil {
-			return exitWithCode(fmt.Errorf("open database: %w", err), exitInputError)
-		}
-		if err := db.Ping(); err != nil {
-			return exitWithCode(fmt.Errorf("connect database: %w", err), exitInputError)
-		}
+	// 2. Open the database read-only
+	db, err := openDatabase(dbPath, flagDebug)
+	if err != nil {
+		return exitWithCode(err, exitInputError)
 	}
 	defer db.Close()
 

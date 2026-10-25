@@ -70,6 +70,16 @@ Config loaded: defaults → TOML (`~/.config/gem-query/config.toml`) → env var
   scans into `duckdb.OrderedMap`, whose `String()` is a debugging form, so
   `normalizeValue` turns it into `map[string]any`. UUID still arrives as 16
   raw bytes and is not formatted.
+- Generated SQL must be a single SELECT as classified by DuckDB's parser
+  (`selectConn`, via the driver's `Prepare` + `StatementType`) before both the
+  dry-run and execution: the driver runs the leading statements of a
+  multi-statement query while preparing it, so `db.Exec("EXPLAIN " + sql)`
+  alone executed `SELECT 1; DROP TABLE t` before the user confirmed.
+- `openDatabase` opens the user's database read-only (DuckDB
+  `?access_mode=read_only`; SQLite via a connector that runs `ATTACH IF NOT
+  EXISTS … (TYPE sqlite, READ_ONLY)` and `USE db` on every new connection,
+  since USE is per connection). Read-only does not stop `COPY … TO`, so the
+  SELECT check is still needed.
 - The native libraries come from `go.duckdb.org/libduckdb/*` through the Go
   module proxy; a restricted `GOPROXY` must allow it.
 - Gemini `SystemInstruction` must be nil (not empty string) when no
