@@ -38,8 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   updated**: `golang.org/x/net` v0.60.0 (GO-2026-6617, -6612, -6611, -6610,
   -6603, -5026, -4918), `google.golang.org/grpc` v1.83.1 (GO-2026-6348,
   -6061), `golang.org/x/text` v0.42.0 (GO-2026-5970) and
-  `go.opentelemetry.io/otel` v1.44.0 (GO-2026-5506). `govulncheck` now reports
-  none reachable.
+  `go.opentelemetry.io/otel` v1.44.0 (GO-2026-5506), and `grpc` further to
+  v1.83.2 (GO-2026-6443). `govulncheck` now reports none reachable.
+- **The Linux and Windows binaries are built with Go 1.26.10** (was 1.26.2,
+  whose standard library has reachable vulnerabilities in `net/http`,
+  `crypto/tls` and `crypto/x509`, fixed by 1.26.9 / 1.26.10). The container
+  image is now `golang:1.26.10`.
 
 ### Fixed
 

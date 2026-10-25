@@ -5,7 +5,7 @@ DIST_DIR := dist
 
 # Container runtime (podman preferred, docker as fallback)
 CONTAINER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
-GO_IMAGE  := golang:1.26.2
+GO_IMAGE  := golang:1.26.10
 
 # macOS Developer ID signing / notarization (see nlink-jp/.github
 # CONVENTIONS.md §Code Signing). Defaults match any Developer ID
