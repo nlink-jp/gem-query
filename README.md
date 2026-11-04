@@ -34,7 +34,8 @@ Settings are loaded in this order (higher priority wins):
 
 ### Config file
 
-Copy the example and edit:
+Copy the example and edit. A key the file does not know — a typo, say — is
+an error that names it, not a setting silently ignored.
 
 ```bash
 mkdir -p ~/.config/gem-query

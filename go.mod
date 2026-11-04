@@ -3,9 +3,9 @@ module github.com/nlink-jp/gem-query
 go 1.26.2
 
 require (
-	github.com/BurntSushi/toml v1.6.0
 	github.com/duckdb/duckdb-go/v2 v2.20000.0
 	github.com/nlink-jp/nlk v0.5.2
+	github.com/nlink-jp/toml v0.1.1
 	github.com/peterh/liner v1.2.2
 	github.com/spf13/cobra v1.10.2
 	google.golang.org/genai v1.53.0
