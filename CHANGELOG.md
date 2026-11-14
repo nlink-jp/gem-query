@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-11-14
+
+### Security
+
+- **One Go release builds every platform: 1.27.4, which `go.mod` now
+  requires** (it was 1.26.2). The Linux and Windows binaries of v0.6.0 were
+  built in a `golang:1.26.10` container while the darwin binary came from the
+  host's Go 1.27.3, so the same tag shipped two standard libraries. The
+  container image is now `golang:1.27.4`, named by tag and by the digest of
+  its multi-arch index, and all four binaries were checked to report
+  `go1.27.4`.
+- **`golang.org/x/net` is updated from v0.60.0 to v0.62.0**, with `x/text`
+  v0.43.0 and `x/crypto` v0.58.0. Nothing gem-query calls was affected:
+  `govulncheck` listed two advisories in `x/net/html`, a package this build
+  does not import. One advisory remains of the same kind, against
+  `x/crypto/openpgp` (unmaintained, no fixed release). The Vertex AI SDK is
+  unchanged (v1.53.0).
+- **Still waiting upstream: CVE-2026-111497** (the Brotli bundled in DuckDB's
+  parquet extension). Checked on 2026-11-14: DuckDB v2.0.0 and its main branch
+  still bundle Brotli 1.1.0, so there is no driver release to move to yet.
+
+### Changed
+
+- **`make package` runs the vulnerability check first** (`make vuln`), so a
+  release cannot be built past a finding.
+
 ## [0.6.0] - 2026-11-04
 
 ### Changed
