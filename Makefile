@@ -5,7 +5,13 @@ DIST_DIR := dist
 
 # Container runtime (podman preferred, docker as fallback)
 CONTAINER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
-GO_IMAGE  := golang:1.26.10
+# The Linux and Windows builds run in this image. It is named by tag and by the
+# digest of its multi-arch index: the tag says which Go release, the digest is
+# what is pulled. The image sets GOTOOLCHAIN=local, so it must not be below the
+# `go` line of go.mod, and it should be the release the darwin build uses — the
+# two were on different Go minors until v0.6.0. Move tag, digest and go.mod
+# together.
+GO_IMAGE  := golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d
 
 # macOS Developer ID signing / notarization (see nlink-jp/.github
 # CONVENTIONS.md §Code Signing). Defaults match any Developer ID
@@ -26,7 +32,7 @@ PLATFORMS := \
 	windows/amd64
 
 .PHONY: build build-all build-darwin build-linux build-linux-native build-windows \
-        package verify-release test vet check clean help
+        package verify-release test vet check clean help vuln
 
 ## build: Build for the current platform (CGO required for DuckDB)
 build:
@@ -96,12 +102,19 @@ build-windows:
 			CC=x86_64-w64-mingw32ucrt-gcc CXX=x86_64-w64-mingw32ucrt-g++ \
 			go build -ldflags "-X main.version=$(VERSION)" -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .'
 
+## vuln: known vulnerabilities in the modules and the standard library this
+## build uses (govulncheck). `package` depends on it, so a release cannot be
+## built past a finding. It needs the network, and its database changes under
+## an unchanged tree: a finding can appear without a commit.
+vuln:
+	govulncheck ./...
+
 ## package: Build all platforms, archive with version suffix (zip for
 ## darwin/windows, tar.gz for linux), bundle the canonical binary +
 ## README.md + LICENSE, and notarize the darwin build. Asset naming
 ## follows the org Release Archive Standard
 ## (gem-query-vX.Y.Z-<os>-<arch>.<ext>).
-package: build-all
+package: vuln build-all
 	@cd $(DIST_DIR) && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
 		ext=""; [ "$$os" = windows ] && ext=".exe"; \
 		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \
