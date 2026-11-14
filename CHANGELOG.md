@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The Linux and Windows builds are scanned with `govulncheck` inside the
+  containers that build them (`make build-linux`, `make build-windows`), right
+  before each is built and with that build's own environment; a finding stops
+  the build. They are cgo builds for another OS, which the macOS host cannot
+  load, so `make vuln` could only ever judge the darwin build. The container
+  installs `govulncheck` by version (`GOVULNCHECK_VERSION` in the Makefile).
+
 ## [0.6.1] - 2026-11-14
 
 ### Security

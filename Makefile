@@ -13,6 +13,14 @@ CONTAINER := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/n
 # together.
 GO_IMAGE  := golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d
 
+# govulncheck for the scans that run inside the build containers (the host's
+# own is whatever is installed there). Named by version: `go install` checks
+# the module against the checksum database, so one version is one body of code.
+# It is installed outside GOPATH/bin, which need not be on PATH, and the
+# version is part of the path, so moving the version installs it again.
+GOVULNCHECK_VERSION := v1.7.0
+VULN_GOBIN := /tmp/govulncheck-$(GOVULNCHECK_VERSION)
+
 # macOS Developer ID signing / notarization (see nlink-jp/.github
 # CONVENTIONS.md §Code Signing). Defaults match any Developer ID
 # Application cert in the keychain and the org-standard notary
@@ -32,6 +40,7 @@ PLATFORMS := \
 	windows/amd64
 
 .PHONY: build build-all build-darwin build-linux build-linux-native build-windows \
+        vuln-linux-native vuln-windows-mingw \
         package verify-release test vet check clean help vuln
 
 ## build: Build for the current platform (CGO required for DuckDB)
@@ -63,7 +72,41 @@ build-linux:
 		bash -c "apt-get update -qq && apt-get install -y -q \
 			gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
 			gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
-			&& make build-linux-native"
+			&& make vuln-linux-native build-linux-native"
+
+$(VULN_GOBIN)/govulncheck:
+	GOBIN=$(VULN_GOBIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+
+## vuln-linux-native: govulncheck over each Linux build, with the environment
+## build-linux-native builds it with (Linux host or the build container).
+## build-linux runs it in the container right before the build: a cgo build
+## for another OS cannot be loaded on the macOS host, so `vuln` cannot see it.
+vuln-linux-native: $(VULN_GOBIN)/govulncheck
+	@echo "govulncheck linux/amd64"
+	@if [ "$$(uname -m)" = "aarch64" ]; then \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-linux-gnu-gcc \
+			$(VULN_GOBIN)/govulncheck ./...; \
+	else \
+		GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
+			$(VULN_GOBIN)/govulncheck ./...; \
+	fi
+	@echo "govulncheck linux/arm64"
+	@if [ "$$(uname -m)" = "x86_64" ]; then \
+		GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc \
+			$(VULN_GOBIN)/govulncheck ./...; \
+	else \
+		GOOS=linux GOARCH=arm64 CGO_ENABLED=1 \
+			$(VULN_GOBIN)/govulncheck ./...; \
+	fi
+
+## vuln-windows-mingw: govulncheck over the Windows build, with the environment
+## build-windows builds it with (inside its container, which has the mingw
+## toolchain). build-windows runs it right before the build.
+vuln-windows-mingw: $(VULN_GOBIN)/govulncheck
+	@echo "govulncheck windows/amd64"
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+		CC=x86_64-w64-mingw32ucrt-gcc CXX=x86_64-w64-mingw32ucrt-g++ \
+		$(VULN_GOBIN)/govulncheck ./...
 
 ## build-linux-native: Compile linux/amd64 and linux/arm64 (Linux host only)
 build-linux-native:
@@ -98,14 +141,18 @@ build-windows:
 		$(GO_IMAGE) \
 		bash -c 'apt-get update -qq && apt-get install -y -q gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64 \
 			&& find /usr/lib/gcc/x86_64-w64-mingw32ucrt /usr/x86_64-w64-mingw32ucrt -name "*.a" -exec x86_64-w64-mingw32ucrt-ranlib {} + \
+			&& make vuln-windows-mingw \
 			&& GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
 			CC=x86_64-w64-mingw32ucrt-gcc CXX=x86_64-w64-mingw32ucrt-g++ \
 			go build -ldflags "-X main.version=$(VERSION)" -o $(DIST_DIR)/$(BINARY)-windows-amd64.exe .'
 
-## vuln: known vulnerabilities in the modules and the standard library this
-## build uses (govulncheck). `package` depends on it, so a release cannot be
-## built past a finding. It needs the network, and its database changes under
-## an unchanged tree: a finding can appear without a commit.
+## vuln: known vulnerabilities in the modules and the standard library the
+## darwin build uses (govulncheck). `package` depends on it, so a release
+## cannot be built past a finding. The Linux and Windows builds are cgo builds
+## made in a container, which the host cannot load: build-linux and
+## build-windows scan each of them there, right before building it, and stop
+## the same way. It needs the network, and its database changes under an
+## unchanged tree: a finding can appear without a commit.
 vuln:
 	govulncheck ./...
 
