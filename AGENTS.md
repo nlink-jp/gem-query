@@ -68,8 +68,8 @@ Config loaded: defaults → TOML (`~/.config/gem-query/config.toml`) → env var
 - DuckDB DECIMAL type returns a struct (`duckdb.Decimal`), not a float.
   The query engine normalizes this to `float64` before display.
 - The driver is `github.com/duckdb/duckdb-go/v2` (`marcboeker/go-duckdb` is
-  frozen). Its version encodes DuckDB's: v2.20000.x = DuckDB v2.0.x. MAP
-  scans into `duckdb.OrderedMap`, whose `String()` is a debugging form, so
+  frozen). Its version encodes DuckDB's: v2.2000N.x = DuckDB v2.0.N
+  (v2.20001.0 = DuckDB v2.0.1). MAP scans into `duckdb.OrderedMap`, whose `String()` is a debugging form, so
   `normalizeValue` turns it into `map[string]any`. UUID arrives as 16 raw
   bytes; `Execute` formats it by the column's DuckDB type (`UUID`), never by
   the value's shape, so a 16-byte BLOB stays raw.
