@@ -5,7 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.6.2] - 2026-11-24
+## [0.6.3] - 2026-11-24
+
+v0.6.2 was tagged but never published: its release check (`make vuln`) stopped
+on the advisory below, which appeared the day before. v0.6.3 is the first
+release that carries the CVE-2026-111497 fix listed under v0.6.2.
+
+### Security
+
+- **OpenTelemetry is updated from v1.44.0 to v1.47.0** (`go.opentelemetry.io/otel`,
+  `otel/trace`, `otel/metric`; they come in through the Vertex AI SDK).
+  `govulncheck` found GO-2026-6974 (CVE-2026-128085, published 2026-11-23:
+  attribute value length limits could be bypassed with U+FFFD runes) on the
+  SDK's tracing path, which gem-query reaches whenever it calls Gemini. Two
+  advisories remain that gem-query does not call: GO-2026-6278 in
+  `github.com/gorilla/websocket` (imported by the SDK; fixed only in an
+  untagged commit) and GO-2026-5932 against `x/crypto/openpgp` (unmaintained,
+  no fixed release).
+
+## [0.6.2] - 2026-11-24 [not published]
 
 ### Security
 
